@@ -52,7 +52,7 @@ const Login: React.FC = () => {
   const handleGoogleSuccess = async (credentialResponse: any) => {
     try {
       setAuthenticationStatus(STATUS.PENDING);
-      const API_URL = import.meta.env.VITE_API_URL || 'https://eventduniya-server.onrender.com';
+      const API_URL = import.meta.env.VITE_API_URL ;
       const response = await axios.post(
         `${API_URL}/api/auth/google`,
         {
@@ -62,6 +62,7 @@ const Login: React.FC = () => {
       );
 
       setAuthenticationStatus(STATUS.SUCCEEDED);
+      
       const { user, token, expiresAt } = response.data;
       login(user, token, expiresAt);
       navigate("/");

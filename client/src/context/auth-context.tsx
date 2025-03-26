@@ -103,7 +103,12 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(user));
       localStorage.setItem('expiresAt', expiresAt);
-
+       if (refreshToken) {
+         // Set refresh token as a cookie
+         document.cookie = `refreshToken=${refreshToken}; path=/; ${
+           process.env.NODE_ENV === "production" ? "secure; sameSite=None" : ""
+         }`;
+       }
       dispatch({
         type: 'login',
         payload: {

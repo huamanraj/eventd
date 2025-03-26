@@ -27,10 +27,17 @@ export const refreshAccessToken = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const refreshToken = req.cookies?.refreshToken;
+    // Check multiple sources for refresh token
+    const refreshToken =
+      req.cookies?.refreshToken ||
+      req.headers["x-refresh-token"] ||
+      req.body?.refreshToken;
+
+    console.log("Received Refresh Token:", !!refreshToken); // Debugging log
 
     if (!refreshToken) {
-      return next(createError.Unauthorized("No refresh token"));
+      res.status(401).json({ message: "No refresh token provided" });
+      return;
     }
 
     const decoded = jwt.verify(
@@ -45,12 +52,9 @@ export const refreshAccessToken = async (
     }
 
     if (!user) {
-      await clearTokens(req, res);
-      return next(createError.Unauthorized("User not found"));
+      res.status(401).json({ message: "User not found" });
+      return;
     }
-
-    // Additional token validation if needed
-    // For example, check if refresh token is in a blacklist or has been revoked
 
     const accessToken = generateJWT(
       user._id.toString(),
@@ -58,38 +62,36 @@ export const refreshAccessToken = async (
       ACCESS_TOKEN_LIFE_SECONDS
     );
 
-    res.cookie("accessToken", accessToken, {
+    // Set new refresh token in cookie
+    res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "none",
-      maxAge: ACCESS_TOKEN_LIFE_SECONDS * 1000,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     res.status(200).json({
       user: {
         _id: user._id,
-        name: user.username,
         email: user.email,
-        // Include only necessary user info
+        // Add other safe user fields
       },
       accessToken,
       expiresAt: new Date(Date.now() + ACCESS_TOKEN_LIFE_SECONDS * 1000),
     });
   } catch (error) {
-    // Specific error handling
-    if (error.name === "TokenExpiredError") {
-      await clearTokens(req, res);
-      return next(createError.Unauthorized("Refresh token expired"));
-    }
+    console.error("Refresh Token Error:", error);
 
     if (error.name === "JsonWebTokenError") {
-      await clearTokens(req, res);
-      return next(createError.Unauthorized("Invalid refresh token"));
+      res.status(401).json({ message: "Invalid refresh token" });
+      return;
     }
 
-    // Unexpected errors
-    console.error("Refresh Token Error:", error);
-    await clearTokens(req, res);
-    return next(createError.Unauthorized("Authentication failed"));
+    if (error.name === "TokenExpiredError") {
+      res.status(401).json({ message: "Refresh token expired" });
+      return;
+    }
+
+    res.status(500).json({ message: "Internal server error" });
   }
 };
