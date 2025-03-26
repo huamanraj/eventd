@@ -134,50 +134,55 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     });
   }, []);
 
-  const refreshToken = React.useCallback(async (): Promise<boolean> => {
-    if (state.verifyingToken) return false;
-    
-    // Check if we've tried to refresh too recently
-    const now = Date.now();
-    if (now - lastRefreshAttempt.current < MIN_REFRESH_INTERVAL) {
-      console.log("Skipping refresh - attempted too recently");
-      return false;
-    }
-    
-    // Update the last refresh attempt timestamp
-    lastRefreshAttempt.current = now;
+const refreshToken = React.useCallback(async (): Promise<boolean> => {
+  if (state.verifyingToken) return false;
 
-    try {
-      dispatch({ type: 'setVerifyingToken', payload: { verifyingToken: true } });
+  const now = Date.now();
+  if (now - lastRefreshAttempt.current < MIN_REFRESH_INTERVAL) {
+    return false;
+  }
 
-      const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/auth/refresh`,
-        {},
-        { 
-          withCredentials: true,
-          timeout: 5000 // Add timeout to prevent long-hanging requests
-        }
-      );
+  lastRefreshAttempt.current = now;
 
-      const { user: refreshedUser, accessToken, expiresAt: refreshedExpiresAt } = response.data;
+  try {
+    dispatch({ type: "setVerifyingToken", payload: { verifyingToken: true } });
 
-      if (response.status === 204) {
-        logout();
+    const response = await axios.post(
+      `${import.meta.env.VITE_API_URL}/api/auth/refresh`,
+      {}, // Empty body
+      {
+        withCredentials: true, // Critical for sending cookies
+        headers: {
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      }
+    );
+
+    const { user, accessToken, expiresAt } = response.data;
+
+    login(user, accessToken, expiresAt);
+    return true;
+  } catch (error) {
+    console.error("Detailed Refresh Error:", {
+      errorName: error.name,
+      errorMessage: error.message,
+      responseStatus: error.response?.status,
+      responseData: error.response?.data,
+    });
+
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 401) {
+        logout(); // Clear local auth state
         return false;
       }
-
-      login(refreshedUser, accessToken, refreshedExpiresAt);
-      return true;
-    } catch (error) {
-      // Only logout on specific errors, not connection errors
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
-        logout();
-      }
-      return false;
-    } finally {
-      dispatch({ type: 'setVerifyingToken', payload: { verifyingToken: false } });
     }
-  }, [login, logout, state.verifyingToken]);
+
+    return false;
+  } finally {
+    dispatch({ type: "setVerifyingToken", payload: { verifyingToken: false } });
+  }
+}, [login, logout, state.verifyingToken]);
 
   // Initialize auth state from localStorage only once
   React.useEffect(() => {

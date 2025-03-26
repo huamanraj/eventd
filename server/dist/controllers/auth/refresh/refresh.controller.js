@@ -24,31 +24,54 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 export const refreshAccessToken = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     var _a;
     try {
-        const refreshToken = (_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken; // Use cookie-parser middleware
+        const refreshToken = (_a = req.cookies) === null || _a === void 0 ? void 0 : _a.refreshToken;
+        if (!refreshToken) {
+            return next(createError.Unauthorized("No refresh token"));
+        }
         const decoded = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET);
         const { userId } = decoded;
         let user = yield User.findById(userId);
         if (!user) {
             user = yield Artist.findById(userId);
         }
-        // If user does not exist, clear tokens and return error
         if (!user) {
             yield clearTokens(req, res);
-            return next(createError.Unauthorized('User not found'));
+            return next(createError.Unauthorized("User not found"));
         }
-        // Generate a new access token
+        // Additional token validation if needed
+        // For example, check if refresh token is in a blacklist or has been revoked
         const accessToken = generateJWT(user._id.toString(), ACCESS_TOKEN_SECRET, ACCESS_TOKEN_LIFE_SECONDS);
-        // Send new access token
+        res.cookie("accessToken", accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "none",
+            maxAge: ACCESS_TOKEN_LIFE_SECONDS * 1000,
+        });
         res.status(200).json({
-            user,
+            user: {
+                _id: user._id,
+                name: user.username,
+                email: user.email,
+                // Include only necessary user info
+            },
             accessToken,
             expiresAt: new Date(Date.now() + ACCESS_TOKEN_LIFE_SECONDS * 1000),
         });
     }
     catch (error) {
-        // Clear tokens in case of invalid refresh token
+        // Specific error handling
+        if (error.name === "TokenExpiredError") {
+            yield clearTokens(req, res);
+            return next(createError.Unauthorized("Refresh token expired"));
+        }
+        if (error.name === "JsonWebTokenError") {
+            yield clearTokens(req, res);
+            return next(createError.Unauthorized("Invalid refresh token"));
+        }
+        // Unexpected errors
+        console.error("Refresh Token Error:", error);
         yield clearTokens(req, res);
-        return next(createError.Unauthorized('Invalid refresh token'));
+        return next(createError.Unauthorized("Authentication failed"));
     }
 });
 //# sourceMappingURL=refresh.controller.js.map

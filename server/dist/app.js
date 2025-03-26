@@ -30,18 +30,18 @@ app.use(session({
         collectionName: "sessions",
     }),
     cookie: {
-        secure: process.env.NODE_ENV === "production", // Secure only in production
-        sameSite: "none", // Required for cross-origin cookies
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "none",
         httpOnly: true,
-        expires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 1 day
+        maxAge: 24 * 60 * 60 * 1000,
     },
 }));
 // Configure CORS with proper options
 app.use(cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
