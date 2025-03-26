@@ -98,22 +98,30 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const MIN_REFRESH_INTERVAL = 5000;
 
   const login = React.useCallback(
-    (user: any, token: string, expiresAt: string) => {
-      // Store auth data in localStorage
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
-      localStorage.setItem('expiresAt', expiresAt);
-       if (refreshToken) {
-         // Set refresh token as a cookie
-         document.cookie = `refreshToken=${refreshToken}; path=/; ${
-           process.env.NODE_ENV === "production" ? "secure; sameSite=None" : ""
-         }`;
-       }
+    (
+      user: any,
+      accessToken: string,
+      expiresAt: string,
+      refreshToken?: string
+    ) => {
+      // Store in localStorage
+      localStorage.setItem("token", accessToken);
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("expiresAt", expiresAt);
+
+      // If refresh token is provided, set it as a cookie
+      if (refreshToken) {
+        // Use document.cookie as a fallback
+        document.cookie = `refreshToken=${refreshToken}; path=/; ${
+          process.env.NODE_ENV === "production" ? "secure; sameSite=None" : ""
+        }; max-age=${7 * 24 * 60 * 60}`; // 7 days
+      }
+
       dispatch({
-        type: 'login',
+        type: "login",
         payload: {
           user,
-          token,
+          token: accessToken,
           expiresAt,
         },
       });
