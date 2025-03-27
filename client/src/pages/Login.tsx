@@ -49,26 +49,22 @@ const Login: React.FC = () => {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse: any) => {
+  const handleGoogleSuccess = async (credentialResponse) => {
     try {
-      setAuthenticationStatus(STATUS.PENDING);
-      const API_URL = import.meta.env.VITE_API_URL ;
       const response = await axios.post(
-        `${API_URL}/api/auth/google`,
+        `${import.meta.env.VITE_API_URL}/api/auth/google`,
+        { credential: credentialResponse.credential },
         {
-          credential: credentialResponse.credential
-        },
-        { withCredentials: true }
+          withCredentials: true, // Important for cookie transmission
+        }
       );
 
-      setAuthenticationStatus(STATUS.SUCCEEDED);
-      
-      const { user, token, expiresAt } = response.data;
-      login(user, token, expiresAt);
-      navigate("/");
-    } catch (error: any) {
-      setAuthenticationStatus(STATUS.FAILED);
-      setErrorMessage(error.response?.data?.error || "Google login failed");
+      const { user, accessToken, refreshToken, expiresAt } = response.data;
+
+      // Pass refresh token to login method
+      login(user, accessToken, expiresAt, refreshToken);
+    } catch (error) {
+      console.error("Google login error", error);
     }
   };
 

@@ -158,6 +158,12 @@ const refreshToken = React.useCallback(async (): Promise<boolean> => {
   lastRefreshAttempt.current = now;
 
   try {
+      console.log("Refresh Attempt", {
+        localStorageToken: localStorage.getItem("token"),
+        localStorageRefreshToken: localStorage.getItem("refreshToken"),
+        cookies: document.cookie,
+      });
+      
     dispatch({ type: "setVerifyingToken", payload: { verifyingToken: true } });
 
     const response = await axios.post(
