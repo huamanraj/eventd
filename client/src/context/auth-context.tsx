@@ -76,7 +76,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
 };
 
 interface AuthContextType extends AuthState {
-  login: (user: any, token: string, expiresAt: string) => void;
+  login: (user: any, token: string, expiresAt: string, refreshToken?: string) => void;
   logout: () => void;
   updateUser: (user: any) => void;
   setAuthenticationStatus: (status: string) => void;
@@ -92,10 +92,10 @@ interface AuthProviderProps {
 const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = React.useReducer(authReducer, initialState);
   const refreshTimeoutRef = React.useRef<NodeJS.Timeout>();
-  // Add a lastRefreshAttempt ref to track when we last tried to refresh
   const lastRefreshAttempt = React.useRef<number>(0);
-  // Add a minimum time between refresh attempts (5 seconds)
   const MIN_REFRESH_INTERVAL = 5000;
+
+  const API_URL = import.meta.env.VITE_API_URL || 'https://eventduniya-server.onrender.com';
 
   const login = React.useCallback(
     (
@@ -109,12 +109,9 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       localStorage.setItem("user", JSON.stringify(user));
       localStorage.setItem("expiresAt", expiresAt);
 
-      // If refresh token is provided, set it as a cookie
+      // If refresh token is provided, store it in local storage as a fallback
       if (refreshToken) {
-        // Use document.cookie as a fallback
-        document.cookie = `refreshToken=${refreshToken}; path=/; ${
-          process.env.NODE_ENV === "production" ? "secure; sameSite=None" : ""
-        }; max-age=${7 * 24 * 60 * 60}`; // 7 days
+        localStorage.setItem("refreshToken", refreshToken);
       }
 
       dispatch({
@@ -129,9 +126,16 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     []
   );
 
-  const logout = React.useCallback(() => {
-    dispatch({ type: 'logout' });
-  }, []);
+  const logout = React.useCallback(async () => {
+    try {
+      // Call the backend logout endpoint to clear cookies
+      await axios.post(`${API_URL}/api/auth/logout`, {}, { withCredentials: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+    } finally {
+      dispatch({ type: 'logout' });
+    }
+  }, [API_URL]);
 
   const updateUser = React.useCallback((user: any) => {
     dispatch({
@@ -158,29 +162,44 @@ const refreshToken = React.useCallback(async (): Promise<boolean> => {
   lastRefreshAttempt.current = now;
 
   try {
-      console.log("Refresh Attempt", {
-        localStorageToken: localStorage.getItem("token"),
-        localStorageRefreshToken: localStorage.getItem("refreshToken"),
-        cookies: document.cookie,
-      });
+    console.log("Refresh Attempt", {
+      localStorageToken: localStorage.getItem("token"),
+      localStorageRefreshToken: localStorage.getItem("refreshToken"),
+      cookies: document.cookie,
+    });
       
     dispatch({ type: "setVerifyingToken", payload: { verifyingToken: true } });
 
+    // Get the fallback refresh token if needed
+    const fallbackRefreshToken = localStorage.getItem("refreshToken");
+
     const response = await axios.post(
-      `${import.meta.env.VITE_API_URL}/api/auth/refresh`,
-      {}, // Empty body
+      `${API_URL}/api/auth/refresh`,
       {
-        withCredentials: true, // Critical for sending cookies
+        // Include fallback refresh token in body if available
+        refreshToken: fallbackRefreshToken || undefined
+      },
+      {
+        withCredentials: true, // Send cookies
         headers: {
           "Content-Type": "application/json",
+          // Include fallback refresh token in Authorization header if available
+          ...(fallbackRefreshToken && {
+            Authorization: `Bearer ${fallbackRefreshToken}`
+          })
         },
         timeout: 5000,
       }
     );
 
-    const { user, accessToken, expiresAt } = response.data;
+    const { user, accessToken, refreshToken: newRefreshToken, expiresAt } = response.data;
 
-    login(user, accessToken, expiresAt);
+    // If new refresh token is provided in response, update localStorage
+    if (newRefreshToken) {
+      localStorage.setItem("refreshToken", newRefreshToken);
+    }
+
+    login(user, accessToken, expiresAt, newRefreshToken);
     return true;
   } catch (error) {
     console.error("Detailed Refresh Error:", {
@@ -201,7 +220,7 @@ const refreshToken = React.useCallback(async (): Promise<boolean> => {
   } finally {
     dispatch({ type: "setVerifyingToken", payload: { verifyingToken: false } });
   }
-}, [login, logout, state.verifyingToken]);
+}, [API_URL, login, logout, state.verifyingToken]);
 
   // Initialize auth state from localStorage only once
   React.useEffect(() => {

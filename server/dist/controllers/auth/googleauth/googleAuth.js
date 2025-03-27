@@ -10,6 +10,8 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 import { OAuth2Client } from 'google-auth-library';
 import createError from 'http-errors';
 import User from '../../../models/User.js';
+import jwt from 'jsonwebtoken';
+import { setRefreshTokenCookie } from '../../../utils/auth/auth.js';
 const client = new OAuth2Client(process.env.GOOGLE_AUTH);
 export const googleAuth = (req, res, next) => __awaiter(void 0, void 0, void 0, function* () {
     try {
@@ -28,12 +30,17 @@ export const googleAuth = (req, res, next) => __awaiter(void 0, void 0, void 0, 
             user = yield User.create({
                 username: name,
                 email,
-                password: "nopassword",
+                password: "nopassword", // Consider using a more secure approach
                 role: "User",
                 avatar: picture,
             });
         }
+        // Generate refresh token and set as cookie
+        const refreshToken = jwt.sign({ userId: user._id }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: Number(process.env.REFRESH_TOKEN_LIFE_SECOND) });
+        // Set the refresh token as a cookie
+        setRefreshTokenCookie(res, refreshToken);
         req.userId = user._id;
+        req.refreshToken = refreshToken; // Pass the refresh token to next middleware
         next();
     }
     catch (error) {

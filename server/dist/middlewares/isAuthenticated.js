@@ -65,6 +65,7 @@ export const isAuthenticated = (roles) => {
                 return;
             }
             // Make sure userId is stored as a string to avoid comparison issues
+            // Cast req to AuthenticatedRequest to add the userId property
             req.userId = foundUser._id.toString();
             console.log(`Setting req.userId to: ${req.userId}`);
             next();

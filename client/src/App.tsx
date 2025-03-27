@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -25,6 +25,9 @@ import EventDetails from './pages/EventDetails';
 import { useAuth } from './context/auth-context';
 import logo from '/logo2.png';
 
+// Lazy load the CookieTest component
+const CookieTest = lazy(() => import('./components/CookieTest'));
+
 // PublicRoute component to prevent logged-in users from accessing public pages
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token } = useAuth();
@@ -37,6 +40,20 @@ const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const App: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const { token, user } = useAuth();
+  const [showDebugTools, setShowDebugTools] = useState(false);
+  
+  // Show debug tools with keyboard shortcut (Ctrl+Shift+D)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        setShowDebugTools(prev => !prev);
+        e.preventDefault();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <Router>
@@ -176,6 +193,25 @@ const App: React.FC = () => {
 
         {/* Main Content */}
         <main className="pt-16">
+          {/* Debug Tools (only shown when activated) */}
+          {showDebugTools && (
+            <div className="container mx-auto px-4 py-2 bg-gray-900 border border-gray-800 rounded-lg mt-2">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold">Debug Tools</h2>
+                <button 
+                  onClick={() => setShowDebugTools(false)}
+                  className="text-gray-500 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-2">Press Ctrl+Shift+D to toggle debug view</p>
+              <Suspense fallback={<div>Loading debug tools...</div>}>
+                <CookieTest />
+              </Suspense>
+            </div>
+          )}
+
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/artist" element={<Artist />} />

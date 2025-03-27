@@ -6,6 +6,7 @@ import { Mail, Lock, AlertCircle, ArrowRight } from "lucide-react";
 import { STATUS } from "../utils/utils";
 import { useAuth } from "../context/auth-context";
 import { GoogleLogin } from "@react-oauth/google";
+import { getCookieDebugInfo } from '../utils/cookieUtils';
 
 interface LoginFormValues {
   username: string;
@@ -25,46 +26,83 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const { login, setAuthenticationStatus } = useAuth();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loginDebug, setLoginDebug] = useState<any>(null);
 
   const onSubmit: SubmitHandler<LoginFormValues> = async (values) => {
     try {
+      setIsLoading(true);
       setAuthenticationStatus(STATUS.PENDING);
+      const API_URL = import.meta.env.VITE_API_URL || 'https://eventduniya-server.onrender.com';
+      
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/auth/login`,
+        `${API_URL}/api/auth/login`,
         {
           username: values.username,
           password: values.password,
           role: values.role,
         },
-        { withCredentials: true }
+        { 
+          withCredentials: true, 
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
 
       setAuthenticationStatus(STATUS.SUCCEEDED);
-      const { user: userObj, token, expiresAt } = response.data;
-      login(userObj, token, expiresAt);
+      const { user: userObj, token, expiresAt, refreshToken } = response.data;
+      
+      // Pass refresh token to login if it's returned in the response
+      login(userObj, token, expiresAt, refreshToken);
+      
+      if (response.data) {
+        const cookieInfo = getCookieDebugInfo();
+        setLoginDebug({
+          cookieInfo,
+          tokenLength: response.data.token?.length || 0,
+          refreshTokenInResponse: !!response.data.refreshToken,
+        });
+      }
+
       navigate("/");
     } catch (error: any) {
       setAuthenticationStatus(STATUS.FAILED);
       setErrorMessage(error.response?.data?.error || "Login failed");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleGoogleSuccess = async (credentialResponse) => {
     try {
+      setIsLoading(true);
+      setAuthenticationStatus(STATUS.PENDING);
+      const API_URL = import.meta.env.VITE_API_URL || 'https://eventduniya-server.onrender.com';
+      
       const response = await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/auth/google`,
+        `${API_URL}/api/auth/google`,
         { credential: credentialResponse.credential },
         {
           withCredentials: true, // Important for cookie transmission
+          headers: {
+            'Content-Type': 'application/json'
+          }
         }
       );
 
-      const { user, accessToken, refreshToken, expiresAt } = response.data;
+      setAuthenticationStatus(STATUS.SUCCEEDED);
+      const { user, token: accessToken, expiresAt, refreshToken } = response.data;
 
       // Pass refresh token to login method
       login(user, accessToken, expiresAt, refreshToken);
+      navigate("/");
     } catch (error) {
       console.error("Google login error", error);
+      setAuthenticationStatus(STATUS.FAILED);
+      setErrorMessage("Google sign in failed. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -210,6 +248,15 @@ const Login: React.FC = () => {
               </Link>
             </p>
           </div>
+
+          {loginDebug && import.meta.env.DEV && (
+            <div className="mt-8 p-4 bg-gray-800 border border-gray-700 rounded-lg">
+              <h3 className="text-sm font-medium mb-2">Debug Info (DEV only)</h3>
+              <pre className="text-xs text-gray-400 overflow-x-auto">
+                {JSON.stringify(loginDebug, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
     </div>

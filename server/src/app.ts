@@ -34,17 +34,19 @@ app.use(
     }),
     cookie: {
       secure: process.env.NODE_ENV === "production",
-      sameSite: "none", 
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", 
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000,
+      domain: process.env.COOKIE_DOMAIN || undefined
     },
   })
 );
 
-// Configure CORS with proper options
+// Configure CORS with proper options for cross-domain cookies
+const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: [frontendUrl, "https://eventduniya.vercel.app"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -53,6 +55,7 @@ app.use(
       "Cookie",
       "x-refresh-token",
     ],
+    exposedHeaders: ["set-cookie"],
   })
 );
 
@@ -96,6 +99,32 @@ const PORT: number | string = process.env.PORT || 5000;
 
 app.get('/', (req, res) => {
   res.status(200).json({ data: "EventDuniya API is running" });
+});
+
+// Health check endpoint that also shows cookie info for debugging
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'healthy',
+    cookies: req.cookies,
+    signedCookies: req.signedCookies,
+    env: {
+      nodeEnv: process.env.NODE_ENV,
+      frontendUrl,
+      cookieDomain: process.env.COOKIE_DOMAIN || 'not set'
+    }
+  });
+});
+
+// Test endpoint to set cookies
+app.get('/api/test-cookie', (req, res) => {
+  res.cookie('testCookie', 'cookieValue', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    maxAge: 60 * 60 * 1000,
+    domain: process.env.COOKIE_DOMAIN || undefined
+  });
+  res.json({ message: 'Test cookie set' });
 });
 
 // Start the server

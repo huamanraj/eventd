@@ -1,6 +1,8 @@
 import { OAuth2Client } from 'google-auth-library';
 import createError from 'http-errors';
 import User from '../../../models/User.js';
+import jwt from 'jsonwebtoken';
+import { setRefreshTokenCookie } from '../../../utils/auth/auth.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_AUTH);
 
@@ -19,22 +21,33 @@ export const googleAuth = async (req, res, next) => {
 
     const payload = ticket.getPayload();
   
-    const {  email, name, picture } = payload;
+    const { email, name, picture } = payload;
 
     let user = await User.findOne({ email });
     if (!user) {
       user = await User.create({
         username: name,
         email,
-        password: "nopassword",
+        password: "nopassword", // Consider using a more secure approach
         role: "User",
         avatar: picture,
       });
     }
 
-    (req as any).userId = user._id;
+    // Generate refresh token and set as cookie
+    const refreshToken = jwt.sign(
+      { userId: user._id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: Number(process.env.REFRESH_TOKEN_LIFE_SECOND) }
+    );
 
-   next();
+    // Set the refresh token as a cookie
+    setRefreshTokenCookie(res, refreshToken);
+
+    (req as any).userId = user._id;
+    (req as any).refreshToken = refreshToken; // Pass the refresh token to next middleware
+
+    next();
   } catch (error) {
     next(error);
   }

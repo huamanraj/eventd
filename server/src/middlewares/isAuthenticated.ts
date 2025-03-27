@@ -8,14 +8,15 @@ dotenv.config();
 
 const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 
-interface AuthenticatedRequest extends Request {
+// Properly define AuthenticatedRequest interface
+export interface AuthenticatedRequest extends Request {
   userId?: string | number;
   signedCookies: { [key: string]: string };
 }
 
 export const isAuthenticated = (roles: string) => {
   return async (
-    req: AuthenticatedRequest,
+    req: Request,
     res: Response,
     next: NextFunction
   ): Promise<void> => {
@@ -81,8 +82,9 @@ export const isAuthenticated = (roles: string) => {
       }
       
       // Make sure userId is stored as a string to avoid comparison issues
-      req.userId = foundUser._id.toString();
-      console.log(`Setting req.userId to: ${req.userId}`);
+      // Cast req to AuthenticatedRequest to add the userId property
+      (req as AuthenticatedRequest).userId = foundUser._id.toString();
+      console.log(`Setting req.userId to: ${(req as AuthenticatedRequest).userId}`);
       next();
     } catch (error) {
       res.status(401).json({ message: 'Unauthorized' });
